@@ -27,7 +27,6 @@ func main() {
 	router.POST("/saludo", func(c *gin.Context) {
 		var requestBody SaludoRequestBody
 
-		//bindjson is work as well
 		err := json.NewDecoder(c.Request.Body).Decode(&requestBody)
 		if err != nil {
 			log.Fatal(err)
