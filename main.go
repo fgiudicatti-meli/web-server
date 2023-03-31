@@ -3,12 +3,12 @@ package main
 import (
 	"encoding/json"
 	"github.com/gin-gonic/gin"
-	"io"
+	"log"
 )
 
 type SaludoRequestBody struct {
-	Nombre   string
-	Apellido string
+	Nombre   string `json:"nombre" binding:"required"`
+	Apellido string `json:"apellido" binding:"required"`
 }
 
 func main() {
@@ -26,14 +26,19 @@ func main() {
 
 	router.POST("/saludo", func(c *gin.Context) {
 		var requestBody SaludoRequestBody
-		body, _ := io.ReadAll(c.Request.Body)
 
-		if err := json.Unmarshal(body, &requestBody); err != nil {
-			c.JSON(403, gin.H{
-				"message": "el cuerpo debe contener las propiedades nombre y apellido en formato de cadena",
-			})
+		//bindjson is work as well
+		err := json.NewDecoder(c.Request.Body).Decode(&requestBody)
+		if err != nil {
+			log.Fatal(err)
 		}
 
+		//other solution using shouldbindjson or bindjson as well
+		/*
+			if err := c.ShouldBindJSON(&requestBody); err != nil {
+				c.AbortWithError(http.StatusBadRequest, err)
+			}
+		*/
 		c.String(200, "Hola %s %s", requestBody.Nombre, requestBody.Apellido)
 	})
 
