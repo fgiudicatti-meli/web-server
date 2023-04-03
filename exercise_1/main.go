@@ -9,13 +9,13 @@ import (
 )
 
 type Product struct {
-	Id          int     `json:"id"`
-	Name        string  `json:"name"`
-	Quantity    int     `json:"quantity"`
-	CodeValue   string  `json:"code_value"`
-	IsPublished bool    `json:"is_published"`
-	Expiration  string  `json:"expiration"`
-	Price       float64 `json:"price"`
+	Id          int     `json:"id" binding:"required,unique"`
+	Name        string  `json:"name" binding:"required"`
+	Quantity    int     `json:"quantity" binding:"required"`
+	CodeValue   string  `json:"code_value" binding:"required"`
+	IsPublished bool    `json:"is_published" binding:"required" default:"false"`
+	Expiration  string  `json:"expiration" binding:"required"`
+	Price       float64 `json:"price" binding:"required"`
 }
 
 var products []Product
@@ -45,7 +45,6 @@ func FindProductById(c *gin.Context) {
 }
 
 func FilterProductsByPrice(c *gin.Context) {
-	GetAll()
 	var filteredProducts []Product
 	formatQueryParam, _ := strconv.ParseFloat(c.Query("priceGt"), 64)
 
@@ -68,15 +67,56 @@ func FilterProductsByPrice(c *gin.Context) {
 
 }
 
+func GetLastId() int {
+	return products[len(products)-1].Id
+}
+
+func AddProduct(c *gin.Context) {
+	type Request struct {
+		Name        string  `json:"name" binding:"required"`
+		Quantity    int     `json:"quantity" binding:"required"`
+		CodeValue   string  `json:"code_value" binding:"required"`
+		IsPublished bool    `json:"is_published" binding:"required"`
+		Expiration  string  `json:"expiration" binding:"required"`
+		Price       float64 `json:"price" binding:"required"`
+	}
+	var req Request
+
+	err := c.ShouldBindJSON(&req)
+	if err != nil {
+		c.JSON(400, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	newProduct := Product{
+		Id:          GetLastId() + 1,
+		Name:        req.Name,
+		Quantity:    req.Quantity,
+		CodeValue:   req.CodeValue,
+		IsPublished: req.IsPublished,
+		Expiration:  req.Expiration,
+		Price:       req.Price,
+	}
+
+	products = append(products, newProduct)
+	c.JSON(201, newProduct)
+}
+
 func main() {
+	GetAll()
 	router := gin.Default()
 
 	router.GET("/ping", func(c *gin.Context) {
 		c.String(200, "pong")
 	})
 
-	router.GET("productos", FilterProductsByPrice)
-	router.GET("productos/:id", FindProductById)
+	GroupProductEndpoints := router.Group("/productos")
+	GroupProductEndpoints.GET("/", FilterProductsByPrice)
+	GroupProductEndpoints.POST("/", AddProduct)
+	GroupProductEndpoints.GET("/:id", FindProductById)
+
 	err := router.Run(":8080")
 	if err != nil {
 		log.Fatal(err)
