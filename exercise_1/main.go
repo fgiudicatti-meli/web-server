@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 )
 
 type Product struct {
@@ -13,7 +14,7 @@ type Product struct {
 	Name        string  `json:"name" binding:"required"`
 	Quantity    int     `json:"quantity" binding:"required"`
 	CodeValue   string  `json:"code_value" binding:"required"`
-	IsPublished bool    `json:"is_published" binding:"required" default:"false"`
+	IsPublished bool    `json:"is_published" binding:"required"`
 	Expiration  string  `json:"expiration" binding:"required"`
 	Price       float64 `json:"price" binding:"required"`
 }
@@ -67,6 +68,17 @@ func FilterProductsByPrice(c *gin.Context) {
 
 }
 
+func validateDate(date string) bool {
+	splitDate := strings.Split(date, "/")
+	day, _ := strconv.Atoi(splitDate[0])
+	month, _ := strconv.Atoi(splitDate[1])
+	year, _ := strconv.Atoi(splitDate[2])
+	if len(splitDate) == 3 && day <= 31 && month <= 12 && day > 0 && month > 0 && year > 0 {
+		return true
+	}
+	return false
+}
+
 func GetLastId() int {
 	return products[len(products)-1].Id
 }
@@ -76,7 +88,7 @@ func AddProduct(c *gin.Context) {
 		Name        string  `json:"name" binding:"required"`
 		Quantity    int     `json:"quantity" binding:"required"`
 		CodeValue   string  `json:"code_value" binding:"required"`
-		IsPublished bool    `json:"is_published" binding:"required"`
+		IsPublished bool    `json:"is_published"`
 		Expiration  string  `json:"expiration" binding:"required"`
 		Price       float64 `json:"price" binding:"required"`
 	}
@@ -85,7 +97,14 @@ func AddProduct(c *gin.Context) {
 	err := c.ShouldBindJSON(&req)
 	if err != nil {
 		c.JSON(400, gin.H{
-			"error": err.Error(),
+			"message": "el body no coincide con la entidad producto",
+		})
+		return
+	}
+
+	if !(validateDate(req.Expiration)) {
+		c.JSON(400, gin.H{
+			"message": "la fecha no es valida",
 		})
 		return
 	}
