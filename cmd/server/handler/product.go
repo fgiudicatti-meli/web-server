@@ -1,8 +1,11 @@
 package handler
 
 import (
+	"encoding/json"
 	"fmt"
-	"github.com/fgiudicatti-meli/web-server/package_oriented_design/internal/product"
+	"github.com/fgiudicatti-meli/web-server/internal/product"
+	"net/http"
+	"os"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -30,7 +33,7 @@ func NewProduct(p product.Service) *Product {
 func (c *Product) GetAll() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		token := ctx.Request.Header.Get("token")
-		if token != "123456" {
+		if token != os.Getenv("TOKEN") {
 			ctx.JSON(401, gin.H{
 				"error": "token inválido",
 			})
@@ -50,7 +53,7 @@ func (c *Product) GetAll() gin.HandlerFunc {
 func (c *Product) GetById() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		token := ctx.Request.Header.Get("token")
-		if token != "123456" {
+		if token != os.Getenv("TOKEN") {
 			ctx.JSON(401, gin.H{
 				"error": "token inválido",
 			})
@@ -77,7 +80,7 @@ func (c *Product) GetById() gin.HandlerFunc {
 func (c *Product) Save() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		token := ctx.Request.Header.Get("token")
-		if token != "123456" {
+		if token != os.Getenv("TOKEN") {
 			ctx.JSON(401, gin.H{"error": "token inválido"})
 			return
 		}
@@ -100,7 +103,7 @@ func (c *Product) Save() gin.HandlerFunc {
 func (c *Product) Update() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		token := ctx.GetHeader("token")
-		if token != "123456" {
+		if token != os.Getenv("TOKEN") {
 			ctx.JSON(401, gin.H{
 				"error": "token invalido",
 			})
@@ -162,10 +165,102 @@ func (c *Product) Update() gin.HandlerFunc {
 	}
 }
 
+func (c *Product) UpdateName() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		token := ctx.GetHeader("token")
+		if token != os.Getenv("TOKEN") {
+			ctx.JSON(401, gin.H{
+				"error": "token invalido",
+			})
+			return
+		}
+
+		id, err := strconv.ParseInt(ctx.Param("id"), 10, 64)
+		if err != nil {
+			ctx.JSON(400, gin.H{
+				"error": "id invalido",
+			})
+			return
+		}
+		var req Request
+		if err := ctx.ShouldBindJSON(&req); err != nil {
+			ctx.JSON(400, gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
+
+		if req.Name == "" {
+			ctx.JSON(400, gin.H{
+				"error": "nombre requerido",
+			})
+			return
+		}
+
+		productUpdateByName, err := c.service.UpdateName(int(id), req.Name)
+		if err != nil {
+			ctx.JSON(404, gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
+
+		ctx.JSON(200, productUpdateByName)
+	}
+}
+
+func (c *Product) UpdatePartial() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		token := ctx.GetHeader("token")
+		if token != os.Getenv("TOKEN") {
+			ctx.JSON(http.StatusUnauthorized, gin.H{
+				"message": "token invalido",
+			})
+			return
+		}
+
+		id, err := strconv.Atoi(ctx.Param("id"))
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{
+				"message": "invalid request",
+			})
+			return
+		}
+
+		oldProduct, err := c.service.GetById(id)
+		if err != nil {
+			ctx.JSON(404, gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
+
+		if err := json.NewDecoder(ctx.Request.Body).Decode(&oldProduct); err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"message": "invalid request"})
+			return
+		}
+		oldProduct.Id = id
+
+		prd, err := c.service.Update(id, oldProduct.Name, oldProduct.CodeValue, oldProduct.Expiration, oldProduct.Quantity, oldProduct.Price, oldProduct.IsPublished)
+		if err != nil {
+			ctx.JSON(400, gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
+
+		ctx.JSON(http.StatusOK, gin.H{
+			"message": "success",
+			"data":    prd,
+		})
+
+	}
+}
+
 func (c *Product) Delete() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		token := ctx.GetHeader("token")
-		if token != "123456" {
+		if token != os.Getenv("TOKEN") {
 			ctx.JSON(401, gin.H{
 				"error": "token invalido",
 			})
