@@ -14,9 +14,13 @@ func main() {
 
 	r := gin.Default()
 	productsGroup := r.Group("/products")
-	productsGroup.POST("/", p.Save())
-	productsGroup.GET("/", p.GetAll())
-	productsGroup.GET("/:id", p.GetById())
+	{
+		productsGroup.POST("/", p.Save())
+		productsGroup.GET("/", p.GetAll())
+		productsGroup.GET("/:id", p.GetById())
+		productsGroup.PUT("/:id", p.Update())
+		productsGroup.DELETE("/:id", p.Delete())
+	}
 
 	err := r.Run(":8080")
 	if err != nil {
