@@ -1,15 +1,15 @@
 package product
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/fgiudicatti-meli/web-server/internal/domain"
-	"log"
-	"os"
+	"github.com/fgiudicatti-meli/web-server/pkg/store"
 )
 
 const (
-	ErrProductNotFound = "user %d not found"
+	ErrProductNotFound     = "product with id: %d not found"
+	ErrFailWhenReadingFile = "fail when try read file"
+	ErrFailWhenWritingFile = "can't write in file"
 )
 
 type Repository interface {
@@ -22,17 +22,19 @@ type Repository interface {
 	UpdateName(id int, name string) (domain.Product, error)
 }
 
-type repository struct{}
+type repository struct {
+	db store.Store
+}
 
-func NewRepository() Repository {
-	return &repository{}
+func NewRepository(db store.Store) Repository {
+	return &repository{
+		db: db,
+	}
 }
 
 // var products []domain.Product
-// var lastId int
-var products = InitValues()
-var lastId = products[len(products)-1].Id
-
+// var lastId = products[len(products)-1].Id
+/*
 func InitValues() []domain.Product {
 
 	productsFromJson, err := os.ReadFile("./products.json")
@@ -46,12 +48,24 @@ func InitValues() []domain.Product {
 	}
 	return products
 }
+*/
+
 func (r *repository) GetAll() ([]domain.Product, error) {
-	return products, nil
+	var users []domain.Product
+	if err := r.db.Read(&users); err != nil {
+		return nil, fmt.Errorf(ErrFailWhenReadingFile)
+	}
+	return users, nil
 }
 
 func (r *repository) Save(id int, name, codeValue, expiration string, quantity int, price float64, isPublished bool) (domain.Product, error) {
-	prd := domain.Product{
+	var products []domain.Product
+
+	if err := r.db.Read(&products); err != nil {
+		return domain.Product{}, fmt.Errorf(ErrFailWhenReadingFile)
+	}
+
+	newProduct := domain.Product{
 		Id:          id,
 		Name:        name,
 		Quantity:    quantity,
@@ -60,29 +74,57 @@ func (r *repository) Save(id int, name, codeValue, expiration string, quantity i
 		Expiration:  expiration,
 		Price:       price,
 	}
-	products = append(products, prd)
-	lastId = prd.Id
-	return prd, nil
+	products = append(products, newProduct)
+
+	if err := r.db.Write(&products); err != nil {
+		return domain.Product{}, fmt.Errorf(ErrFailWhenWritingFile)
+	}
+
+	return newProduct, nil
 }
 
 func (r *repository) GetLastId() (int, error) {
-	return lastId, nil
+	var products []domain.Product
+	if err := r.db.Read(&products); err != nil {
+		return 0, fmt.Errorf(ErrFailWhenReadingFile)
+	}
+
+	if len(products) == 0 {
+		return 0, nil
+	}
+	return products[len(products)-1].Id, nil
 }
 
 func (r *repository) GetById(id int) (domain.Product, error) {
-	var target domain.Product
-	for _, p := range products {
-		if p.Id == id {
-			target = p
-			return target, nil
+	var products []domain.Product
+	if err := r.db.Read(&products); err != nil {
+		return domain.Product{}, fmt.Errorf(ErrFailWhenReadingFile)
+	}
+
+	var targetProduct domain.Product
+	founded := false
+	for i := range products {
+		if products[i].Id == id {
+			targetProduct = products[i]
+			founded = true
+			break
 		}
 	}
 
-	return domain.Product{}, fmt.Errorf(ErrProductNotFound, id)
+	if !founded {
+		return domain.Product{}, fmt.Errorf(ErrProductNotFound, id)
+	}
+
+	return targetProduct, nil
 }
 
 func (r *repository) Update(id int, name, codeValue, expiration string, quantity int, price float64, isPublished bool) (domain.Product, error) {
-	p := domain.Product{
+	var products []domain.Product
+	if err := r.db.Read(&products); err != nil {
+		return domain.Product{}, fmt.Errorf(ErrFailWhenReadingFile)
+	}
+
+	updateUser := domain.Product{
 		Name:        name,
 		Quantity:    quantity,
 		CodeValue:   codeValue,
@@ -90,54 +132,80 @@ func (r *repository) Update(id int, name, codeValue, expiration string, quantity
 		Expiration:  expiration,
 		Price:       price,
 	}
+	hasChange := false
 
-	updated := false
 	for i := range products {
 		if products[i].Id == id {
-			p.Id = id
-			products[i] = p
-			updated = true
+			updateUser.Id = id
+			products[i] = updateUser
+			hasChange = true
+			break
 		}
 	}
 
-	if !updated {
+	if !hasChange {
 		return domain.Product{}, fmt.Errorf(ErrProductNotFound, id)
 	}
-	return p, nil
 
+	if err := r.db.Write(&products); err != nil {
+		return domain.Product{}, fmt.Errorf(ErrFailWhenWritingFile)
+	}
+
+	return updateUser, nil
 }
 
 func (r *repository) UpdateName(id int, name string) (domain.Product, error) {
-	var productUpdate domain.Product
-	updated := false
+	var products []domain.Product
+	if err := r.db.Read(&products); err != nil {
+		return domain.Product{}, fmt.Errorf(ErrFailWhenReadingFile)
+	}
+
+	hasChange := false
+	var updateProduct domain.Product
 	for i := range products {
 		if products[i].Id == id {
 			products[i].Name = name
-			updated = true
-			productUpdate = products[i]
+			hasChange = true
+			updateProduct = products[i]
+			break
 		}
 	}
 
-	if !updated {
+	if !hasChange {
 		return domain.Product{}, fmt.Errorf(ErrProductNotFound, id)
 	}
-	return productUpdate, nil
+
+	if err := r.db.Write(&products); err != nil {
+		return domain.Product{}, fmt.Errorf(ErrFailWhenWritingFile)
+	}
+
+	return updateProduct, nil
 }
 
 func (r *repository) Delete(id int) (err error) {
-	deleted := false
-	var index int
+	var products []domain.Product
+	if err := r.db.Read(&products); err != nil {
+		return fmt.Errorf(ErrFailWhenReadingFile)
+	}
+
+	var indexProductToDelete int
+	hasFounded := false
 	for i := range products {
 		if products[i].Id == id {
-			index = i
-			deleted = true
+			indexProductToDelete = i
+			hasFounded = true
+			break
 		}
 	}
 
-	if !deleted {
-		return fmt.Errorf("no existe el usuario con %d", id)
+	if !hasFounded {
+		return fmt.Errorf(ErrProductNotFound, id)
 	}
 
-	products = append(products[:index], products[index+1:]...)
+	products = append(products[:indexProductToDelete], products[indexProductToDelete+1:]...)
+	if err := r.db.Write(&products); err != nil {
+		return fmt.Errorf(ErrFailWhenWritingFile)
+	}
+
 	return nil
 }

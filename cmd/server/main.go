@@ -3,14 +3,23 @@ package main
 import (
 	"github.com/fgiudicatti-meli/web-server/cmd/server/handler"
 	"github.com/fgiudicatti-meli/web-server/internal/product"
+	"github.com/fgiudicatti-meli/web-server/pkg/store"
 	"github.com/joho/godotenv"
+	"log"
 
 	"github.com/gin-gonic/gin"
 )
 
 func main() {
-	_ = godotenv.Load()
-	repo := product.NewRepository()
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("error en el cargado del file .env")
+	}
+	db := store.NewStore("products.json")
+	if err := db.Check(); err != nil {
+		log.Fatal("error al intentar cargar el archivo del store")
+	}
+	repo := product.NewRepository(db)
 	service := product.NewService(repo)
 	p := handler.NewProduct(service)
 
@@ -26,7 +35,7 @@ func main() {
 		productsGroup.DELETE("/:id", p.Delete())
 	}
 
-	err := r.Run(":8080")
+	err = r.Run(":8080")
 	if err != nil {
 		panic(err)
 	}

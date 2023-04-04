@@ -27,7 +27,7 @@ func NewService(r Repository) Service {
 func (s *service) GetAll() ([]domain.Product, error) {
 	allProducts, err := s.repository.GetAll()
 	if err != nil {
-		return []domain.Product{}, fmt.Errorf("la lista de productos esta vacia")
+		return nil, err
 	}
 
 	return allProducts, nil
@@ -36,36 +36,49 @@ func (s *service) GetAll() ([]domain.Product, error) {
 func (s *service) Save(name, codeValue, expiration string, quantity int, price float64, isPublished bool) (domain.Product, error) {
 	lastId, err := s.repository.GetLastId()
 	if err != nil {
-		return domain.Product{}, fmt.Errorf("internal server error")
+		return domain.Product{}, fmt.Errorf("error in generate last id: %w", err)
 	}
 
 	lastId++
 
-	prd, err := s.repository.Save(lastId, name, codeValue, expiration, quantity, price, isPublished)
+	newProduct, err := s.repository.Save(lastId, name, codeValue, expiration, quantity, price, isPublished)
 	if err != nil {
-		return domain.Product{}, fmt.Errorf("algo paso al intentar guardar controle el cuerpo y el id ingresado")
+		return domain.Product{}, fmt.Errorf("error when try creating product: %w", err)
 	}
 
-	return prd, nil
+	return newProduct, nil
 }
 
 func (s *service) GetById(id int) (domain.Product, error) {
 	productById, err := s.repository.GetById(id)
 	if err != nil {
-		return domain.Product{}, fmt.Errorf("no se encontro el producto con %d", id)
+		return domain.Product{}, err
 	}
 
 	return productById, nil
 }
 
 func (s *service) Update(id int, name, codeValue, expiration string, quantity int, price float64, isPublished bool) (domain.Product, error) {
-	return s.repository.Update(id, name, codeValue, expiration, quantity, price, isPublished)
+	product, err := s.repository.Update(id, name, codeValue, expiration, quantity, price, isPublished)
+	if err != nil {
+		return domain.Product{}, fmt.Errorf("error when try update user: %w", err)
+	}
+	return product, nil
 }
 
 func (s *service) Delete(id int) error {
-	return s.repository.Delete(id)
+	err := s.repository.Delete(id)
+	if err != nil {
+		return fmt.Errorf("error when try deleted product: %w", err)
+	}
+
+	return nil
 }
 
 func (s *service) UpdateName(id int, name string) (domain.Product, error) {
-	return s.repository.UpdateName(id, name)
+	product, err := s.repository.UpdateName(id, name)
+	if err != nil {
+		return domain.Product{}, fmt.Errorf("error when update user: %w", err)
+	}
+	return product, nil
 }
