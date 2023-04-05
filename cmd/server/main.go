@@ -26,6 +26,7 @@ func main() {
 	{
 		productsGroup.POST("/", p.Save())
 		productsGroup.GET("/", p.GetAll())
+		productsGroup.GET("/consumer_price", p.GetSumProducts())
 		productsGroup.GET("/:id", p.GetById())
 		productsGroup.PUT("/:id", p.Update())
 		productsGroup.PATCH("/:id/name", p.UpdateName())

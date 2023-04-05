@@ -3,11 +3,13 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/fgiudicatti-meli/web-server/internal/domain"
 	"github.com/fgiudicatti-meli/web-server/internal/product"
 	"github.com/fgiudicatti-meli/web-server/pkg/web"
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -231,4 +233,70 @@ func (c *Product) Delete() gin.HandlerFunc {
 		}
 		ctx.JSON(http.StatusOK, web.NewResponse(http.StatusOK, fmt.Sprintf("El producto con id %d ha sido eliminado", id), ""))
 	}
+}
+
+func (c *Product) GetSumProducts() gin.HandlerFunc {
+	type response struct {
+		Products   any     `json:"products"`
+		TotalPrice float64 `json:"total_price"`
+	}
+	return func(ctx *gin.Context) {
+		token := ctx.GetHeader("token")
+		if token != os.Getenv("TOKEN") {
+			ctx.JSON(http.StatusUnauthorized, web.NewResponse(http.StatusUnauthorized, nil, "token invalido"))
+			return
+		}
+
+		query := ctx.Query("list")
+		if query == "" {
+			ctx.JSON(http.StatusBadRequest, web.NewResponse(http.StatusBadRequest, nil, "debe ingresar una lista de ids de productos"))
+			return
+		}
+		var filterProducts []domain.Product
+		var totalPrice float64
+		ids := strings.Split(query, ",")
+		for _, idInStr := range ids {
+			value, err := strconv.Atoi(idInStr)
+			if err != nil {
+				ctx.JSON(http.StatusBadRequest, web.NewResponse(http.StatusBadRequest, nil, "ingrese una lista correct de ids"))
+				return
+			}
+			prd, err := c.service.GetById(value)
+			if err != nil {
+				ctx.JSON(http.StatusNotFound, web.NewResponse(http.StatusNotFound, nil, "no todos los ids corresponden a un producto"))
+				return
+			}
+			if checkValidate(prd.Id, filterProducts) {
+				ctx.JSON(http.StatusBadRequest, web.NewResponse(http.StatusBadRequest, nil, "se encontraron ids repetidos"))
+				return
+			}
+			filterProducts = append(filterProducts, prd)
+		}
+
+		for i := range filterProducts {
+			totalPrice += filterProducts[i].Price
+		}
+
+		switch {
+		case len(filterProducts) < 10:
+			totalPrice = totalPrice * 1.21
+		case len(filterProducts) > 10 && len(filterProducts) < 20:
+			totalPrice = totalPrice * 1.17
+		default:
+			totalPrice = totalPrice * 1.15
+		}
+		resp := response{Products: filterProducts, TotalPrice: float64(int(totalPrice*100)) / 100}
+
+		ctx.JSON(http.StatusOK, web.NewResponse(http.StatusOK, resp, ""))
+	}
+}
+
+func checkValidate(id int, slice []domain.Product) bool {
+	for i := range slice {
+		if slice[i].Id == id {
+			return true
+		}
+	}
+
+	return false
 }
