@@ -41,7 +41,7 @@ func createServer(token string) *gin.Engine {
 		pr.GET("", productHandler.GetAll())
 		pr.GET(":id", productHandler.GetByID())
 		pr.GET("/search", productHandler.Search())
-		pr.POST("", productHandler.Post())
+		pr.POST("", productHandler.AddProduct())
 		pr.DELETE(":id", productHandler.Delete())
 		pr.PATCH(":id", productHandler.Patch())
 		pr.PUT(":id", productHandler.Put())
@@ -64,7 +64,7 @@ func loadProducts(path string) ([]domain.Product, error) {
 	if err != nil {
 		return nil, err
 	}
-	err = json.Unmarshal([]byte(file), &products)
+	err = json.Unmarshal(file, &products)
 	if err != nil {
 		return nil, err
 	}
@@ -72,11 +72,11 @@ func loadProducts(path string) ([]domain.Product, error) {
 }
 
 func writeProducts(path string, list []domain.Product) error {
-	bytes, err := json.Marshal(list)
+	listToBytes, err := json.Marshal(list)
 	if err != nil {
 		return err
 	}
-	err = os.WriteFile(path, bytes, 0644)
+	err = os.WriteFile(path, listToBytes, 0644)
 	if err != nil {
 		return err
 	}
@@ -143,10 +143,10 @@ func Test_Post_OK(t *testing.T) {
 		Price:       50.50,
 	}}
 
-	product, _ := json.Marshal(expectd.Data)
+	productTest, _ := json.Marshal(expectd.Data)
 
 	r := createServer("my-secret-token")
-	req, rr := createRequestTest(http.MethodPost, "/products", string(product), "my-secret-token")
+	req, rr := createRequestTest(http.MethodPost, "/products", string(productTest), "my-secret-token")
 
 	p, _ := loadProducts("./products_copy.json")
 

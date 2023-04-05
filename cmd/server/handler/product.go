@@ -40,12 +40,12 @@ func (h *productHandler) GetByID() gin.HandlerFunc {
 			web.Failure(c, 400, errors.New("invalid id"))
 			return
 		}
-		product, err := h.s.GetByID(id)
+		productFounded, err := h.s.GetByID(id)
 		if err != nil {
 			web.Failure(c, 404, errors.New("product not found"))
 			return
 		}
-		web.Success(c, 200, product)
+		web.Success(c, 200, productFounded)
 	}
 }
 
@@ -105,9 +105,9 @@ func validateExpiration(exp string) (bool, error) {
 }
 
 // Post crear un producto nuevo
-func (h *productHandler) Post() gin.HandlerFunc {
+func (h *productHandler) AddProduct() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var product domain.Product
+		var newProduct domain.Product
 		token := c.GetHeader("TOKEN")
 		if token == "" {
 			web.Failure(c, 401, errors.New("token not found"))
@@ -117,27 +117,27 @@ func (h *productHandler) Post() gin.HandlerFunc {
 			web.Failure(c, 401, errors.New("invalid token"))
 			return
 		}
-		err := c.ShouldBindJSON(&product)
+		err := c.ShouldBindJSON(&newProduct)
 		if err != nil {
 			web.Failure(c, 400, errors.New("invalid json"))
 			return
 		}
-		valid, err := validateEmptys(&product)
+		valid, err := validateEmptys(&newProduct)
 		if !valid {
 			web.Failure(c, 400, err)
 			return
 		}
-		valid, err = validateExpiration(product.Expiration)
+		valid, err = validateExpiration(newProduct.Expiration)
 		if !valid {
 			web.Failure(c, 400, err)
 			return
 		}
-		p, err := h.s.Create(product)
+		createProduct, err := h.s.Create(newProduct)
 		if err != nil {
 			web.Failure(c, 400, err)
 			return
 		}
-		web.Success(c, 201, p)
+		web.Success(c, 201, createProduct)
 	}
 }
 
@@ -195,28 +195,28 @@ func (h *productHandler) Put() gin.HandlerFunc {
 			web.Failure(c, 409, err)
 			return
 		}
-		var product domain.Product
-		err = c.ShouldBindJSON(&product)
+		var productToUpdate domain.Product
+		err = c.ShouldBindJSON(&productToUpdate)
 		if err != nil {
 			web.Failure(c, 400, errors.New("invalid json"))
 			return
 		}
-		valid, err := validateEmptys(&product)
+		valid, err := validateEmptys(&productToUpdate)
 		if !valid {
 			web.Failure(c, 400, err)
 			return
 		}
-		valid, err = validateExpiration(product.Expiration)
+		valid, err = validateExpiration(productToUpdate.Expiration)
 		if !valid {
 			web.Failure(c, 400, err)
 			return
 		}
-		p, err := h.s.Update(id, product)
+		updateProduct, err := h.s.Update(id, productToUpdate)
 		if err != nil {
 			web.Failure(c, 409, err)
 			return
 		}
-		web.Success(c, 200, p)
+		web.Success(c, 200, updateProduct)
 	}
 }
 
