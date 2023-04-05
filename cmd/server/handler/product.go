@@ -270,7 +270,16 @@ func (c *Product) GetSumProducts() gin.HandlerFunc {
 				ctx.JSON(http.StatusBadRequest, web.NewResponse(http.StatusBadRequest, nil, "se encontraron ids repetidos"))
 				return
 			}
+			if !prd.IsPublished {
+				ctx.JSON(http.StatusBadRequest, web.NewResponse(http.StatusBadRequest, nil, "recuerda que debes enviar productos que se encuentren publicados"))
+			}
 			filterProducts = append(filterProducts, prd)
+		}
+
+		allRecords, _ := c.service.GetAll()
+		if len(allRecords) < len(filterProducts) {
+			ctx.JSON(http.StatusBadRequest, web.NewResponse(http.StatusBadRequest, nil, "la cantidad de productos enviados supera la cantidad total"))
+			return
 		}
 
 		for i := range filterProducts {
