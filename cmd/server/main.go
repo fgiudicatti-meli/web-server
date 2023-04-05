@@ -10,11 +10,11 @@ import (
 
 func main() {
 
-	if err := godotenv.Load("./.env"); err != nil {
+	if err := godotenv.Load("../../.env"); err != nil {
 		panic("Error loading .env file: " + err.Error())
 	}
 
-	storage := store.NewStore("./products.json")
+	storage := store.NewStore("../../products.json")
 
 	repo := product.NewRepository(storage)
 	service := product.NewService(repo)
@@ -28,7 +28,8 @@ func main() {
 		products.GET("", productHandler.GetAll())
 		products.GET(":id", productHandler.GetByID())
 		products.GET("/search", productHandler.Search())
-		products.POST("", productHandler.Post())
+		products.GET("/consumer_price", productHandler.GetPriceProducts())
+		products.POST("", productHandler.AddProduct())
 		products.DELETE(":id", productHandler.Delete())
 		products.PATCH(":id", productHandler.Patch())
 		products.PUT(":id", productHandler.Put())

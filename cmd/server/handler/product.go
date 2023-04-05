@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -13,57 +14,79 @@ import (
 )
 
 type productHandler struct {
-	s product.Service
+	service product.Service
 }
 
 // NewProductHandler crea un nuevo controller de productos
 func NewProductHandler(s product.Service) *productHandler {
 	return &productHandler{
-		s: s,
+		service: s,
 	}
 }
 
 // GetAll obtiene todos los productos
 func (h *productHandler) GetAll() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		products, _ := h.s.GetAll()
-		web.Success(c, 200, products)
+	return func(ctx *gin.Context) {
+		token := ctx.Request.Header.Get("token")
+		if token != os.Getenv("TOKEN") {
+			web.Failure(ctx, http.StatusUnauthorized, errors.New("invalid token"))
+			return
+		}
+		products, err := h.service.GetAll()
+		if err != nil {
+			web.Failure(ctx, http.StatusNotFound, errors.New("not found products"))
+			return
+		}
+		web.Success(ctx, 200, products)
 	}
 }
 
 // GetByID obtiene un producto por su id
 func (h *productHandler) GetByID() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		idParam := c.Param("id")
-		id, err := strconv.Atoi(idParam)
-		if err != nil {
-			web.Failure(c, 400, errors.New("invalid id"))
+	return func(ctx *gin.Context) {
+		token := ctx.Request.Header.Get("token")
+		if token != os.Getenv("TOKEN") {
+			web.Failure(ctx, http.StatusUnauthorized, errors.New("invalid token"))
 			return
 		}
-		productFounded, err := h.s.GetByID(id)
+
+		id, err := strconv.Atoi(ctx.Param("id"))
 		if err != nil {
-			web.Failure(c, 404, errors.New("product not found"))
+			web.Failure(ctx, http.StatusBadRequest, errors.New("invalid id"))
 			return
 		}
-		web.Success(c, 200, productFounded)
+
+		productFounded, err := h.service.GetByID(id)
+		if err != nil {
+			web.Failure(ctx, http.StatusNotFound, errors.New("product not found"))
+			return
+		}
+		web.Success(ctx, http.StatusOK, productFounded)
 	}
 }
 
 // Search busca un producto por precio mayor a un valor
 func (h *productHandler) Search() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		priceParam := c.Query("priceGt")
-		price, err := strconv.ParseFloat(priceParam, 64)
-		if err != nil {
-			web.Failure(c, 400, errors.New("invalid price"))
+	return func(ctx *gin.Context) {
+		token := ctx.Request.Header.Get("token")
+		if token != os.Getenv("TOKEN") {
+			web.Failure(ctx, http.StatusUnauthorized, errors.New("invalid token"))
 			return
 		}
-		products, err := h.s.SearchPriceGt(price)
+
+		price, err := strconv.ParseFloat(ctx.Query("priceGt"), 64)
 		if err != nil {
-			web.Failure(c, 404, errors.New("product not found"))
+			web.Failure(ctx, http.StatusBadRequest, errors.New("invalid price"))
 			return
 		}
-		web.Success(c, 200, products)
+
+		products, err := h.service.SearchPriceGt(price)
+		if err != nil {
+			web.Failure(ctx, http.StatusNotFound, errors.New("product not found"))
+			return
+		}
+
+		web.Success(ctx, http.StatusOK, products)
 	}
 }
 
@@ -86,7 +109,8 @@ func validateEmptys(product *domain.Product) (bool, error) {
 // validateExpiration valida que la fecha de expiracion sea valida
 func validateExpiration(exp string) (bool, error) {
 	dates := strings.Split(exp, "/")
-	list := []int{}
+	//list := []int{}
+	var list []int
 	if len(dates) != 3 {
 		return false, errors.New("invalid expiration date, must be in format: dd/mm/yyyy")
 	}
@@ -104,119 +128,111 @@ func validateExpiration(exp string) (bool, error) {
 	return true, nil
 }
 
-// Post crear un producto nuevo
+// AddProduct crear un producto nuevo
 func (h *productHandler) AddProduct() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		var newProduct domain.Product
-		token := c.GetHeader("TOKEN")
-		if token == "" {
-			web.Failure(c, 401, errors.New("token not found"))
-			return
-		}
+	return func(ctx *gin.Context) {
+		token := ctx.Request.Header.Get("token")
 		if token != os.Getenv("TOKEN") {
-			web.Failure(c, 401, errors.New("invalid token"))
+			web.Failure(ctx, http.StatusUnauthorized, errors.New("invalid token"))
 			return
 		}
-		err := c.ShouldBindJSON(&newProduct)
+
+		var newProduct domain.Product
+		err := ctx.ShouldBindJSON(&newProduct)
 		if err != nil {
-			web.Failure(c, 400, errors.New("invalid json"))
+			web.Failure(ctx, http.StatusBadRequest, errors.New("invalid json"))
 			return
 		}
 		valid, err := validateEmptys(&newProduct)
 		if !valid {
-			web.Failure(c, 400, err)
+			web.Failure(ctx, http.StatusBadRequest, err)
 			return
 		}
 		valid, err = validateExpiration(newProduct.Expiration)
 		if !valid {
-			web.Failure(c, 400, err)
+			web.Failure(ctx, http.StatusBadRequest, err)
 			return
 		}
-		createProduct, err := h.s.Create(newProduct)
+		createProduct, err := h.service.Create(newProduct)
 		if err != nil {
-			web.Failure(c, 400, err)
+			web.Failure(ctx, http.StatusBadRequest, err)
 			return
 		}
-		web.Success(c, 201, createProduct)
+
+		web.Success(ctx, http.StatusCreated, createProduct)
 	}
 }
 
 // Delete elimina un producto
 func (h *productHandler) Delete() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		token := c.GetHeader("TOKEN")
-		if token == "" {
-			web.Failure(c, 401, errors.New("token not found"))
-			return
-		}
+	return func(ctx *gin.Context) {
+		token := ctx.Request.Header.Get("token")
 		if token != os.Getenv("TOKEN") {
-			web.Failure(c, 401, errors.New("invalid token"))
+			web.Failure(ctx, http.StatusUnauthorized, errors.New("invalid token"))
 			return
 		}
-		idParam := c.Param("id")
-		id, err := strconv.Atoi(idParam)
+
+		id, err := strconv.Atoi(ctx.Param("id"))
 		if err != nil {
-			web.Failure(c, 400, errors.New("invalid id"))
+			web.Failure(ctx, http.StatusBadRequest, errors.New("invalid id"))
 			return
 		}
-		err = h.s.Delete(id)
+
+		err = h.service.Delete(id)
 		if err != nil {
-			web.Failure(c, 404, err)
+			web.Failure(ctx, http.StatusNotFound, err)
 			return
 		}
-		web.Success(c, 204, nil)
+
+		web.Success(ctx, http.StatusNoContent, nil)
 	}
 }
 
 // Put actualiza un producto
 func (h *productHandler) Put() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		token := c.GetHeader("TOKEN")
-		if token == "" {
-			web.Failure(c, 401, errors.New("token not found"))
-			return
-		}
+	return func(ctx *gin.Context) {
+		token := ctx.Request.Header.Get("token")
 		if token != os.Getenv("TOKEN") {
-			web.Failure(c, 401, errors.New("invalid token"))
+			web.Failure(ctx, http.StatusUnauthorized, errors.New("invalid token"))
 			return
 		}
-		idParam := c.Param("id")
-		id, err := strconv.Atoi(idParam)
+
+		id, err := strconv.Atoi(ctx.Param("id"))
 		if err != nil {
-			web.Failure(c, 400, errors.New("invalid id"))
+			web.Failure(ctx, http.StatusBadRequest, errors.New("invalid id"))
 			return
 		}
-		_, err = h.s.GetByID(id)
+		_, err = h.service.GetByID(id)
 		if err != nil {
-			web.Failure(c, 404, errors.New("product not found"))
+			web.Failure(ctx, http.StatusNotFound, errors.New("product not found"))
 			return
 		}
-		if err != nil {
-			web.Failure(c, 409, err)
-			return
-		}
+
 		var productToUpdate domain.Product
-		err = c.ShouldBindJSON(&productToUpdate)
+		err = ctx.ShouldBindJSON(&productToUpdate)
 		if err != nil {
-			web.Failure(c, 400, errors.New("invalid json"))
+			web.Failure(ctx, http.StatusBadRequest, errors.New("invalid json"))
 			return
 		}
+
 		valid, err := validateEmptys(&productToUpdate)
 		if !valid {
-			web.Failure(c, 400, err)
+			web.Failure(ctx, http.StatusBadRequest, err)
 			return
 		}
 		valid, err = validateExpiration(productToUpdate.Expiration)
 		if !valid {
-			web.Failure(c, 400, err)
+			web.Failure(ctx, http.StatusBadRequest, err)
 			return
 		}
-		updateProduct, err := h.s.Update(id, productToUpdate)
+
+		updateProduct, err := h.service.Update(id, productToUpdate)
 		if err != nil {
-			web.Failure(c, 409, err)
+			web.Failure(ctx, http.StatusConflict, err)
 			return
 		}
-		web.Success(c, 200, updateProduct)
+
+		web.Success(ctx, http.StatusOK, updateProduct)
 	}
 }
 
@@ -230,32 +246,42 @@ func (h *productHandler) Patch() gin.HandlerFunc {
 		Expiration  string  `json:"expiration,omitempty"`
 		Price       float64 `json:"price,omitempty"`
 	}
-	return func(c *gin.Context) {
-		token := c.GetHeader("TOKEN")
-		if token == "" {
-			web.Failure(c, 401, errors.New("token not found"))
-			return
-		}
+	return func(ctx *gin.Context) {
+		token := ctx.Request.Header.Get("token")
 		if token != os.Getenv("TOKEN") {
-			web.Failure(c, 401, errors.New("invalid token"))
+			web.Failure(ctx, http.StatusUnauthorized, errors.New("invalid token"))
 			return
 		}
+
 		var r Request
-		idParam := c.Param("id")
-		id, err := strconv.Atoi(idParam)
+		id, err := strconv.Atoi(ctx.Param("id"))
 		if err != nil {
-			web.Failure(c, 400, errors.New("invalid id"))
+			web.Failure(ctx, http.StatusBadRequest, errors.New("invalid id"))
 			return
 		}
-		_, err = h.s.GetByID(id)
+		/* other way
+		oldProduct, err := c.service.GetById(id)
+			if err != nil {
+				ctx.JSON(http.StatusNotFound, web.NewResponse(http.StatusNotFound, nil, err.Error()))
+				return
+			}
+
+			if err := json.NewDecoder(ctx.Request.Body).Decode(&oldProduct); err != nil {
+				ctx.JSON(http.StatusBadRequest, web.NewResponse(http.StatusBadRequest, nil, "bad request"))
+				return
+			}
+			oldProduct.Id = id
+		*/
+		_, err = h.service.GetByID(id)
 		if err != nil {
-			web.Failure(c, 404, errors.New("product not found"))
+			web.Failure(ctx, http.StatusNotFound, errors.New("product not found"))
 			return
 		}
-		if err := c.ShouldBindJSON(&r); err != nil {
-			web.Failure(c, 400, errors.New("invalid json"))
+		if err := ctx.ShouldBindJSON(&r); err != nil {
+			web.Failure(ctx, http.StatusBadRequest, errors.New("invalid json"))
 			return
 		}
+
 		update := domain.Product{
 			Name:        r.Name,
 			Quantity:    r.Quantity,
@@ -267,15 +293,93 @@ func (h *productHandler) Patch() gin.HandlerFunc {
 		if update.Expiration != "" {
 			valid, err := validateExpiration(update.Expiration)
 			if !valid {
-				web.Failure(c, 400, err)
+				web.Failure(ctx, http.StatusBadRequest, err)
 				return
 			}
 		}
-		p, err := h.s.Update(id, update)
+
+		p, err := h.service.Update(id, update)
 		if err != nil {
-			web.Failure(c, 409, err)
+			web.Failure(ctx, http.StatusConflict, err)
 			return
 		}
-		web.Success(c, 200, p)
+
+		web.Success(ctx, http.StatusOK, p)
 	}
+}
+
+func (h *productHandler) GetPriceProducts() gin.HandlerFunc {
+	type response struct {
+		Products   any     `json:"products"`
+		TotalPrice float64 `json:"total_price"`
+	}
+	return func(ctx *gin.Context) {
+		token := ctx.Request.Header.Get("token")
+		if token != os.Getenv("TOKEN") {
+			web.Failure(ctx, http.StatusUnauthorized, errors.New("invalid token"))
+			return
+		}
+
+		query := ctx.Query("list")
+		if query == "" {
+			web.Failure(ctx, http.StatusBadRequest, errors.New("invalid query param"))
+			return
+		}
+		var filterProducts []domain.Product
+		var totalPrice float64
+		ids := strings.Split(query, ",")
+		for _, idInStr := range ids {
+			id, err := strconv.Atoi(idInStr)
+			if err != nil {
+				web.Failure(ctx, http.StatusBadRequest, errors.New("list of ids invalid"))
+				return
+			}
+			prd, err := h.service.GetByID(id)
+			if err != nil {
+				web.Failure(ctx, http.StatusBadRequest, errors.New("some ids are not associate with a product"))
+				return
+			}
+			if checkValidate(prd.Id, filterProducts) {
+				web.Failure(ctx, http.StatusBadRequest, errors.New("some ids are repeated"))
+				return
+			}
+			if !prd.IsPublished {
+				web.Failure(ctx, http.StatusBadRequest, errors.New("remember ids must be a product published"))
+				return
+			}
+			filterProducts = append(filterProducts, prd)
+		}
+
+		allRecords, _ := h.service.GetAll()
+		if len(allRecords) < len(filterProducts) {
+			web.Failure(ctx, http.StatusBadRequest, errors.New("list is too much longer"))
+			return
+		}
+
+		for i := range filterProducts {
+			totalPrice += filterProducts[i].Price
+		}
+
+		switch {
+		case len(filterProducts) < 10:
+			totalPrice = totalPrice * 1.21
+		case len(filterProducts) > 10 && len(filterProducts) < 20:
+			totalPrice = totalPrice * 1.17
+		default:
+			totalPrice = totalPrice * 1.15
+		}
+		resp := response{Products: filterProducts, TotalPrice: float64(int(totalPrice*100)) / 100}
+
+		web.Success(ctx, http.StatusOK, resp)
+	}
+}
+
+func checkValidate(id int, slice []domain.Product) bool {
+	for i := range slice {
+		if slice[i].Id == id {
+			return true
+		}
+	}
+
+	return false
 }
