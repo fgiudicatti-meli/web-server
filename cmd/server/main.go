@@ -4,36 +4,35 @@ import (
 	"github.com/fgiudicatti-meli/web-server/cmd/server/handler"
 	"github.com/fgiudicatti-meli/web-server/internal/product"
 	"github.com/fgiudicatti-meli/web-server/pkg/store"
-	"github.com/joho/godotenv"
-	"log"
-
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 )
 
 func main() {
-	_ = godotenv.Load()
 
-	db := store.NewStore("products.json")
-	if err := db.Check(); err != nil {
-		log.Fatal("error al intentar cargar el archivo del store")
+	if err := godotenv.Load("./.env"); err != nil {
+		panic("Error loading .env file: " + err.Error())
 	}
-	repo := product.NewRepository(db)
+
+	storage := store.NewStore("./products.json")
+
+	repo := product.NewRepository(storage)
 	service := product.NewService(repo)
-	p := handler.NewProduct(service)
+	productHandler := handler.NewProductHandler(service)
 
 	r := gin.Default()
-	productsGroup := r.Group("/products")
-	{
-		productsGroup.GET("/", p.GetAll())
-		productsGroup.GET("/consumer_price", p.GetPriceProducts())
-		productsGroup.GET("/:id", p.GetById())
-		productsGroup.POST("/", p.Save())
-		productsGroup.PUT("/:id", p.Update())
-		productsGroup.PATCH("/:id/name", p.UpdateName())
-		productsGroup.PATCH("/:id", p.UpdatePartial())
-		productsGroup.DELETE("/:id", p.Delete())
-	}
 
+	r.GET("/ping", func(c *gin.Context) { c.String(200, "pong") })
+	products := r.Group("/products")
+	{
+		products.GET("", productHandler.GetAll())
+		products.GET(":id", productHandler.GetByID())
+		products.GET("/search", productHandler.Search())
+		products.POST("", productHandler.Post())
+		products.DELETE(":id", productHandler.Delete())
+		products.PATCH(":id", productHandler.Patch())
+		products.PUT(":id", productHandler.Put())
+	}
 	err := r.Run(":8080")
 	if err != nil {
 		panic(err)

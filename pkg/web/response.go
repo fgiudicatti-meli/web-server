@@ -1,15 +1,33 @@
 package web
 
-type Response struct {
-	StatusCode int    `json:"code"`
-	Data       any    `json:"data"`
-	ErrorMsg   string `json:"error"`
+import (
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+)
+
+type errorResponse struct {
+	Status  int    `json:"status"`
+	Code    string `json:"code"`
+	Message string `json:"message"`
 }
 
-func NewResponse(code int, data any, err string) Response {
-	if code < 300 {
-		return Response{code, data, ""}
-	}
+type response struct {
+	Data interface{} `json:"data"`
+}
 
-	return Response{code, nil, err}
+// Success escribe una respuesta exitosa
+func Success(ctx *gin.Context, status int, data interface{}) {
+	ctx.JSON(status, response{
+		Data: data,
+	})
+}
+
+// Failure escribe una respuesta fallida
+func Failure(ctx *gin.Context, status int, err error) {
+	ctx.JSON(status, errorResponse{
+		Message: err.Error(),
+		Status:  status,
+		Code:    http.StatusText(status),
+	})
 }

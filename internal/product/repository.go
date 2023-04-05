@@ -1,211 +1,107 @@
 package product
 
 import (
-	"fmt"
+	"errors"
+
 	"github.com/fgiudicatti-meli/web-server/internal/domain"
 	"github.com/fgiudicatti-meli/web-server/pkg/store"
 )
 
-const (
-	ErrProductNotFound     = "product with id: %d not found"
-	ErrFailWhenReadingFile = "fail when try read file"
-	ErrFailWhenWritingFile = "can't write in file"
-)
-
 type Repository interface {
-	GetAll() ([]domain.Product, error)
-	Save(id int, name, codeValue, expiration string, quantity int, price float64, isPublished bool) (domain.Product, error)
-	GetLastId() (int, error)
-	GetById(id int) (domain.Product, error)
-	Update(id int, name, codeValue, expiration string, quantity int, price float64, isPublished bool) (domain.Product, error)
+	GetAll() []domain.Product
+	GetByID(id int) (domain.Product, error)
+	SearchPriceGt(price float64) []domain.Product
+	Create(p domain.Product) (domain.Product, error)
+	Update(id int, p domain.Product) (domain.Product, error)
 	Delete(id int) error
-	UpdateName(id int, name string) (domain.Product, error)
 }
 
 type repository struct {
-	db store.Store
+	storage store.Store
 }
 
-func NewRepository(db store.Store) Repository {
-	return &repository{
-		db: db,
-	}
+// NewRepository crea un nuevo repositorio
+func NewRepository(storage store.Store) Repository {
+	return &repository{storage}
 }
 
-// var products []domain.Product
-// var lastId = products[len(products)-1].Id
-/*
-func InitValues() []domain.Product {
-
-	productsFromJson, err := os.ReadFile("./products.json")
+// GetAll devuelve todos los productos
+func (r *repository) GetAll() []domain.Product {
+	products, err := r.storage.GetAll()
 	if err != nil {
-		log.Fatal(err)
-	}
-
-	var products []domain.Product
-	if err := json.Unmarshal(productsFromJson, &products); err != nil {
-		log.Fatal(err)
+		return []domain.Product{}
 	}
 	return products
 }
-*/
 
-func (r *repository) GetAll() ([]domain.Product, error) {
-	var users []domain.Product
-	if err := r.db.Read(&users); err != nil {
-		return nil, fmt.Errorf(ErrFailWhenReadingFile)
+// GetByID busca un producto por su id
+func (r *repository) GetByID(id int) (domain.Product, error) {
+	product, err := r.storage.GetOne(id)
+	if err != nil {
+		return domain.Product{}, errors.New("product not found")
 	}
-	return users, nil
+	return product, nil
+
 }
 
-func (r *repository) Save(id int, name, codeValue, expiration string, quantity int, price float64, isPublished bool) (domain.Product, error) {
+// SearchPriceGt busca productos por precio mayor o igual que el precio dado
+func (r *repository) SearchPriceGt(price float64) []domain.Product {
 	var products []domain.Product
-
-	if err := r.db.Read(&products); err != nil {
-		return domain.Product{}, fmt.Errorf(ErrFailWhenReadingFile)
+	list, err := r.storage.GetAll()
+	if err != nil {
+		return products
 	}
-
-	newProduct := domain.Product{
-		Id:          id,
-		Name:        name,
-		Quantity:    quantity,
-		CodeValue:   codeValue,
-		IsPublished: isPublished,
-		Expiration:  expiration,
-		Price:       price,
-	}
-	products = append(products, newProduct)
-
-	if err := r.db.Write(products); err != nil {
-		return domain.Product{}, fmt.Errorf(ErrFailWhenWritingFile)
-	}
-
-	return newProduct, nil
-}
-
-func (r *repository) GetLastId() (int, error) {
-	var products []domain.Product
-	if err := r.db.Read(&products); err != nil {
-		return 0, fmt.Errorf(ErrFailWhenReadingFile)
-	}
-
-	if len(products) == 0 {
-		return 0, nil
-	}
-	return products[len(products)-1].Id, nil
-}
-
-func (r *repository) GetById(id int) (domain.Product, error) {
-	var products []domain.Product
-	if err := r.db.Read(&products); err != nil {
-		return domain.Product{}, fmt.Errorf(ErrFailWhenReadingFile)
-	}
-
-	var targetProduct domain.Product
-	founded := false
-	for i := range products {
-		if products[i].Id == id {
-			targetProduct = products[i]
-			founded = true
-			break
+	for _, product := range list {
+		if product.Price > price {
+			products = append(products, product)
 		}
 	}
-
-	if !founded {
-		return domain.Product{}, fmt.Errorf(ErrProductNotFound, id)
-	}
-
-	return targetProduct, nil
+	return products
 }
 
-func (r *repository) Update(id int, name, codeValue, expiration string, quantity int, price float64, isPublished bool) (domain.Product, error) {
-	var products []domain.Product
-	if err := r.db.Read(&products); err != nil {
-		return domain.Product{}, fmt.Errorf(ErrFailWhenReadingFile)
+// Create agrega un nuevo producto
+func (r *repository) Create(p domain.Product) (domain.Product, error) {
+	if !r.validateCodeValue(p.CodeValue) {
+		return domain.Product{}, errors.New("code value already exists")
 	}
-
-	updateUser := domain.Product{
-		Name:        name,
-		Quantity:    quantity,
-		CodeValue:   codeValue,
-		IsPublished: isPublished,
-		Expiration:  expiration,
-		Price:       price,
+	err := r.storage.AddOne(p)
+	if err != nil {
+		return domain.Product{}, errors.New("error creating product")
 	}
-	hasChange := false
-
-	for i := range products {
-		if products[i].Id == id {
-			updateUser.Id = id
-			products[i] = updateUser
-			hasChange = true
-			break
-		}
-	}
-
-	if !hasChange {
-		return domain.Product{}, fmt.Errorf(ErrProductNotFound, id)
-	}
-
-	if err := r.db.Write(products); err != nil {
-		return domain.Product{}, fmt.Errorf(ErrFailWhenWritingFile)
-	}
-
-	return updateUser, nil
+	return p, nil
 }
 
-func (r *repository) UpdateName(id int, name string) (domain.Product, error) {
-	var products []domain.Product
-	if err := r.db.Read(&products); err != nil {
-		return domain.Product{}, fmt.Errorf(ErrFailWhenReadingFile)
+// validateCodeValue valida que el codigo no exista en la lista de productos
+func (r *repository) validateCodeValue(codeValue string) bool {
+	list, err := r.storage.GetAll()
+	if err != nil {
+		return false
 	}
-
-	hasChange := false
-	var updateProduct domain.Product
-	for i := range products {
-		if products[i].Id == id {
-			products[i].Name = name
-			hasChange = true
-			updateProduct = products[i]
-			break
+	for _, product := range list {
+		if product.CodeValue == codeValue {
+			return false
 		}
 	}
-
-	if !hasChange {
-		return domain.Product{}, fmt.Errorf(ErrProductNotFound, id)
-	}
-
-	if err := r.db.Write(products); err != nil {
-		return domain.Product{}, fmt.Errorf(ErrFailWhenWritingFile)
-	}
-
-	return updateProduct, nil
+	return true
 }
 
-func (r *repository) Delete(id int) (err error) {
-	var products []domain.Product
-	if err := r.db.Read(&products); err != nil {
-		return fmt.Errorf(ErrFailWhenReadingFile)
+// Delete elimina un producto
+func (r *repository) Delete(id int) error {
+	err := r.storage.DeleteOne(id)
+	if err != nil {
+		return err
 	}
-
-	var indexProductToDelete int
-	hasFounded := false
-	for i := range products {
-		if products[i].Id == id {
-			indexProductToDelete = i
-			hasFounded = true
-			break
-		}
-	}
-
-	if !hasFounded {
-		return fmt.Errorf(ErrProductNotFound, id)
-	}
-
-	products = append(products[:indexProductToDelete], products[indexProductToDelete+1:]...)
-	if err := r.db.Write(products); err != nil {
-		return fmt.Errorf(ErrFailWhenWritingFile)
-	}
-
 	return nil
+}
+
+// Update actualiza un producto
+func (r *repository) Update(id int, p domain.Product) (domain.Product, error) {
+	if !r.validateCodeValue(p.CodeValue) {
+		return domain.Product{}, errors.New("code value already exists")
+	}
+	err := r.storage.UpdateOne(p)
+	if err != nil {
+		return domain.Product{}, errors.New("error updating product")
+	}
+	return p, nil
 }

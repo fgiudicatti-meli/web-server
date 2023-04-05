@@ -1,84 +1,95 @@
 package product
 
 import (
-	"fmt"
+	"errors"
+
 	"github.com/fgiudicatti-meli/web-server/internal/domain"
 )
 
 type Service interface {
 	GetAll() ([]domain.Product, error)
-	Save(name, codeValue, expiration string, quantity int, price float64, isPublished bool) (domain.Product, error)
-	GetById(id int) (domain.Product, error)
-	Update(id int, name, codeValue, expiration string, quantity int, price float64, isPublished bool) (domain.Product, error)
+	GetByID(id int) (domain.Product, error)
+	SearchPriceGt(price float64) ([]domain.Product, error)
+	Create(p domain.Product) (domain.Product, error)
+	Update(id int, p domain.Product) (domain.Product, error)
 	Delete(id int) error
-	UpdateName(id int, name string) (domain.Product, error)
 }
 
 type service struct {
-	repository Repository
+	r Repository
 }
 
+// NewService crea un nuevo servicio
 func NewService(r Repository) Service {
-	return &service{
-		repository: r,
-	}
+	return &service{r}
 }
 
+// GetAll devuelve todos los productos
 func (s *service) GetAll() ([]domain.Product, error) {
-	allProducts, err := s.repository.GetAll()
-	if err != nil {
-		return nil, err
-	}
-
-	return allProducts, nil
+	l := s.r.GetAll()
+	return l, nil
 }
 
-func (s *service) Save(name, codeValue, expiration string, quantity int, price float64, isPublished bool) (domain.Product, error) {
-	lastId, err := s.repository.GetLastId()
-	if err != nil {
-		return domain.Product{}, fmt.Errorf("error in generate last id: %w", err)
-	}
-
-	lastId++
-
-	newProduct, err := s.repository.Save(lastId, name, codeValue, expiration, quantity, price, isPublished)
-	if err != nil {
-		return domain.Product{}, fmt.Errorf("error when try creating product: %w", err)
-	}
-
-	return newProduct, nil
-}
-
-func (s *service) GetById(id int) (domain.Product, error) {
-	productById, err := s.repository.GetById(id)
+// GetByID busca un producto por su id
+func (s *service) GetByID(id int) (domain.Product, error) {
+	p, err := s.r.GetByID(id)
 	if err != nil {
 		return domain.Product{}, err
 	}
-
-	return productById, nil
+	return p, nil
 }
 
-func (s *service) Update(id int, name, codeValue, expiration string, quantity int, price float64, isPublished bool) (domain.Product, error) {
-	product, err := s.repository.Update(id, name, codeValue, expiration, quantity, price, isPublished)
-	if err != nil {
-		return domain.Product{}, fmt.Errorf("error when try update user: %w", err)
+// SearchPriceGt busca productos por precio mayor que el precio dado
+func (s *service) SearchPriceGt(price float64) ([]domain.Product, error) {
+	l := s.r.SearchPriceGt(price)
+	if len(l) == 0 {
+		return []domain.Product{}, errors.New("no products found")
 	}
-	return product, nil
+	return l, nil
 }
 
+// Create agrega un nuevo producto
+func (s *service) Create(p domain.Product) (domain.Product, error) {
+	p, err := s.r.Create(p)
+	if err != nil {
+		return domain.Product{}, err
+	}
+	return p, nil
+}
+
+// Delete elimina un producto
 func (s *service) Delete(id int) error {
-	err := s.repository.Delete(id)
+	err := s.r.Delete(id)
 	if err != nil {
-		return fmt.Errorf("error when try deleted product: %w", err)
+		return err
 	}
-
 	return nil
 }
 
-func (s *service) UpdateName(id int, name string) (domain.Product, error) {
-	product, err := s.repository.UpdateName(id, name)
+// Update actualiza un producto
+func (s *service) Update(id int, u domain.Product) (domain.Product, error) {
+	p, err := s.r.GetByID(id)
 	if err != nil {
-		return domain.Product{}, fmt.Errorf("error when update user: %w", err)
+		return domain.Product{}, err
 	}
-	return product, nil
+	if u.Name != "" {
+		p.Name = u.Name
+	}
+	if u.CodeValue != "" {
+		p.CodeValue = u.CodeValue
+	}
+	if u.Expiration != "" {
+		p.Expiration = u.Expiration
+	}
+	if u.Quantity > 0 {
+		p.Quantity = u.Quantity
+	}
+	if u.Price > 0 {
+		p.Price = u.Price
+	}
+	p, err = s.r.Update(id, p)
+	if err != nil {
+		return domain.Product{}, err
+	}
+	return p, nil
 }

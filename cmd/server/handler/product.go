@@ -1,310 +1,281 @@
 package handler
 
 import (
-	"encoding/json"
-	"github.com/fgiudicatti-meli/web-server/internal/domain"
-	"github.com/fgiudicatti-meli/web-server/internal/product"
-	"github.com/fgiudicatti-meli/web-server/pkg/web"
-	"net/http"
+	"errors"
 	"os"
 	"strconv"
 	"strings"
 
+	"github.com/fgiudicatti-meli/web-server/internal/domain"
+	"github.com/fgiudicatti-meli/web-server/internal/product"
+	"github.com/fgiudicatti-meli/web-server/pkg/web"
 	"github.com/gin-gonic/gin"
 )
 
-type Request struct {
-	Name        string  `json:"name" binding:"required"`
-	Quantity    int     `json:"quantity" binding:"required"`
-	CodeValue   string  `json:"code_value" binding:"required"`
-	IsPublished bool    `json:"is_published"`
-	Expiration  string  `json:"expiration" binding:"required"`
-	Price       float64 `json:"price" binding:"required"`
+type productHandler struct {
+	s product.Service
 }
 
-type Product struct {
-	service product.Service
-}
-
-func NewProduct(p product.Service) *Product {
-	return &Product{
-		service: p,
+// NewProductHandler crea un nuevo controller de productos
+func NewProductHandler(s product.Service) *productHandler {
+	return &productHandler{
+		s: s,
 	}
 }
 
-func (c *Product) GetAll() gin.HandlerFunc {
-	return func(ctx *gin.Context) {
-		token := ctx.Request.Header.Get("token")
+// GetAll obtiene todos los productos
+func (h *productHandler) GetAll() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		products, _ := h.s.GetAll()
+		web.Success(c, 200, products)
+	}
+}
+
+// GetByID obtiene un producto por su id
+func (h *productHandler) GetByID() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		idParam := c.Param("id")
+		id, err := strconv.Atoi(idParam)
+		if err != nil {
+			web.Failure(c, 400, errors.New("invalid id"))
+			return
+		}
+		product, err := h.s.GetByID(id)
+		if err != nil {
+			web.Failure(c, 404, errors.New("product not found"))
+			return
+		}
+		web.Success(c, 200, product)
+	}
+}
+
+// Search busca un producto por precio mayor a un valor
+func (h *productHandler) Search() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		priceParam := c.Query("priceGt")
+		price, err := strconv.ParseFloat(priceParam, 64)
+		if err != nil {
+			web.Failure(c, 400, errors.New("invalid price"))
+			return
+		}
+		products, err := h.s.SearchPriceGt(price)
+		if err != nil {
+			web.Failure(c, 404, errors.New("product not found"))
+			return
+		}
+		web.Success(c, 200, products)
+	}
+}
+
+// validateEmptys valida que los campos no esten vacios
+func validateEmptys(product *domain.Product) (bool, error) {
+	switch {
+	case product.Name == "" || product.CodeValue == "" || product.Expiration == "":
+		return false, errors.New("fields can't be empty")
+	case product.Quantity <= 0 || product.Price <= 0:
+		if product.Quantity <= 0 {
+			return false, errors.New("quantity must be greater than 0")
+		}
+		if product.Price <= 0 {
+			return false, errors.New("price must be greater than 0")
+		}
+	}
+	return true, nil
+}
+
+// validateExpiration valida que la fecha de expiracion sea valida
+func validateExpiration(exp string) (bool, error) {
+	dates := strings.Split(exp, "/")
+	list := []int{}
+	if len(dates) != 3 {
+		return false, errors.New("invalid expiration date, must be in format: dd/mm/yyyy")
+	}
+	for value := range dates {
+		number, err := strconv.Atoi(dates[value])
+		if err != nil {
+			return false, errors.New("invalid expiration date, must be numbers")
+		}
+		list = append(list, number)
+	}
+	condition := (list[0] < 1 || list[0] > 31) && (list[1] < 1 || list[1] > 12) && (list[2] < 1 || list[2] > 9999)
+	if condition {
+		return false, errors.New("invalid expiration date, date must be between 1 and 31/12/9999")
+	}
+	return true, nil
+}
+
+// Post crear un producto nuevo
+func (h *productHandler) Post() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var product domain.Product
+		token := c.GetHeader("TOKEN")
+		if token == "" {
+			web.Failure(c, 401, errors.New("token not found"))
+			return
+		}
 		if token != os.Getenv("TOKEN") {
-			ctx.JSON(http.StatusUnauthorized, web.NewResponse(http.StatusUnauthorized, nil, "token invalido"))
+			web.Failure(c, 401, errors.New("invalid token"))
 			return
 		}
-		allProducts, err := c.service.GetAll()
+		err := c.ShouldBindJSON(&product)
 		if err != nil {
-			ctx.JSON(http.StatusNotFound, web.NewResponse(http.StatusNotFound, nil, err.Error()))
+			web.Failure(c, 400, errors.New("invalid json"))
 			return
 		}
-		ctx.JSON(http.StatusOK, web.NewResponse(http.StatusOK, allProducts, ""))
+		valid, err := validateEmptys(&product)
+		if !valid {
+			web.Failure(c, 400, err)
+			return
+		}
+		valid, err = validateExpiration(product.Expiration)
+		if !valid {
+			web.Failure(c, 400, err)
+			return
+		}
+		p, err := h.s.Create(product)
+		if err != nil {
+			web.Failure(c, 400, err)
+			return
+		}
+		web.Success(c, 201, p)
 	}
 }
 
-func (c *Product) GetById() gin.HandlerFunc {
-	return func(ctx *gin.Context) {
-		token := ctx.Request.Header.Get("token")
+// Delete elimina un producto
+func (h *productHandler) Delete() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		token := c.GetHeader("TOKEN")
+		if token == "" {
+			web.Failure(c, 401, errors.New("token not found"))
+			return
+		}
 		if token != os.Getenv("TOKEN") {
-			ctx.JSON(http.StatusUnauthorized, web.NewResponse(http.StatusUnauthorized, nil, "token invalido"))
+			web.Failure(c, 401, errors.New("invalid token"))
 			return
 		}
-		id, err := strconv.Atoi(ctx.Param("id"))
+		idParam := c.Param("id")
+		id, err := strconv.Atoi(idParam)
 		if err != nil {
-			ctx.JSON(http.StatusBadRequest, web.NewResponse(http.StatusBadRequest, nil, "id invalido"))
+			web.Failure(c, 400, errors.New("invalid id"))
 			return
 		}
-		productById, err := c.service.GetById(id)
+		err = h.s.Delete(id)
 		if err != nil {
-			ctx.JSON(http.StatusNotFound, web.NewResponse(http.StatusNotFound, nil, err.Error()))
+			web.Failure(c, 404, err)
 			return
 		}
-		ctx.JSON(http.StatusOK, web.NewResponse(http.StatusOK, productById, ""))
+		web.Success(c, 204, nil)
 	}
 }
 
-func (c *Product) Save() gin.HandlerFunc {
-	return func(ctx *gin.Context) {
-		token := ctx.Request.Header.Get("token")
+// Put actualiza un producto
+func (h *productHandler) Put() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		token := c.GetHeader("TOKEN")
+		if token == "" {
+			web.Failure(c, 401, errors.New("token not found"))
+			return
+		}
 		if token != os.Getenv("TOKEN") {
-			ctx.JSON(http.StatusUnauthorized, web.NewResponse(http.StatusUnauthorized, nil, "token invalido"))
+			web.Failure(c, 401, errors.New("invalid token"))
 			return
 		}
-
-		var req Request
-		if err := ctx.Bind(&req); err != nil {
-			ctx.JSON(http.StatusBadRequest, web.NewResponse(http.StatusBadRequest, nil, err.Error()))
-			return
-		}
-
-		createProduct, err := c.service.Save(req.Name, req.CodeValue, req.Expiration, req.Quantity, req.Price, req.IsPublished)
+		idParam := c.Param("id")
+		id, err := strconv.Atoi(idParam)
 		if err != nil {
-			ctx.JSON(http.StatusNotFound, web.NewResponse(http.StatusNotFound, nil, err.Error()))
+			web.Failure(c, 400, errors.New("invalid id"))
 			return
 		}
-
-		ctx.JSON(http.StatusCreated, web.NewResponse(http.StatusCreated, createProduct, ""))
+		_, err = h.s.GetByID(id)
+		if err != nil {
+			web.Failure(c, 404, errors.New("product not found"))
+			return
+		}
+		if err != nil {
+			web.Failure(c, 409, err)
+			return
+		}
+		var product domain.Product
+		err = c.ShouldBindJSON(&product)
+		if err != nil {
+			web.Failure(c, 400, errors.New("invalid json"))
+			return
+		}
+		valid, err := validateEmptys(&product)
+		if !valid {
+			web.Failure(c, 400, err)
+			return
+		}
+		valid, err = validateExpiration(product.Expiration)
+		if !valid {
+			web.Failure(c, 400, err)
+			return
+		}
+		p, err := h.s.Update(id, product)
+		if err != nil {
+			web.Failure(c, 409, err)
+			return
+		}
+		web.Success(c, 200, p)
 	}
 }
 
-func (c *Product) Update() gin.HandlerFunc {
-	return func(ctx *gin.Context) {
-		token := ctx.GetHeader("token")
-		if token != os.Getenv("TOKEN") {
-			ctx.JSON(http.StatusUnauthorized, web.NewResponse(http.StatusUnauthorized, nil, "token invalido"))
-			return
-		}
-
-		id, err := strconv.Atoi(ctx.Param("id"))
-		if err != nil {
-			ctx.JSON(http.StatusBadRequest, web.NewResponse(http.StatusBadRequest, nil, "id invalido"))
-			return
-		}
-
-		var req Request
-		if err := ctx.ShouldBindJSON(&req); err != nil {
-			ctx.JSON(http.StatusBadRequest, web.NewResponse(http.StatusBadRequest, nil, err.Error()))
-			return
-		}
-
-		switch {
-		case req.Name == "":
-			ctx.JSON(http.StatusBadRequest, web.NewResponse(http.StatusBadRequest, nil, "nombre es requerido"))
-			return
-		case req.CodeValue == "":
-			ctx.JSON(http.StatusBadRequest, web.NewResponse(http.StatusBadRequest, nil, "codeValue es requerido"))
-			return
-		case req.Expiration == "":
-			ctx.JSON(http.StatusBadRequest, web.NewResponse(http.StatusBadRequest, nil, "expiration es requerido"))
-			return
-		case req.Price == 0:
-			ctx.JSON(http.StatusBadRequest, web.NewResponse(http.StatusBadRequest, nil, "price es requerido"))
-			return
-		case req.Quantity == 0:
-			ctx.JSON(http.StatusBadRequest, web.NewResponse(http.StatusBadRequest, nil, "quantity es requerido"))
-			return
-		}
-
-		updateProduct, err := c.service.Update(id, req.Name, req.CodeValue, req.Expiration, req.Quantity, req.Price, req.IsPublished)
-		if err != nil {
-			ctx.JSON(http.StatusNotFound, web.NewResponse(http.StatusNotFound, nil, err.Error()))
-			return
-		}
-		ctx.JSON(http.StatusOK, web.NewResponse(http.StatusOK, updateProduct, ""))
+// Patch update selected fields of a product WIP
+func (h *productHandler) Patch() gin.HandlerFunc {
+	type Request struct {
+		Name        string  `json:"name,omitempty"`
+		Quantity    int     `json:"quantity,omitempty"`
+		CodeValue   string  `json:"code_value,omitempty"`
+		IsPublished bool    `json:"is_published,omitempty"`
+		Expiration  string  `json:"expiration,omitempty"`
+		Price       float64 `json:"price,omitempty"`
 	}
-}
-
-func (c *Product) UpdateName() gin.HandlerFunc {
-	return func(ctx *gin.Context) {
-		token := ctx.GetHeader("token")
+	return func(c *gin.Context) {
+		token := c.GetHeader("TOKEN")
+		if token == "" {
+			web.Failure(c, 401, errors.New("token not found"))
+			return
+		}
 		if token != os.Getenv("TOKEN") {
-			ctx.JSON(http.StatusUnauthorized, web.NewResponse(http.StatusUnauthorized, nil, "token invalido"))
+			web.Failure(c, 401, errors.New("invalid token"))
 			return
 		}
-
-		id, err := strconv.Atoi(ctx.Param("id"))
+		var r Request
+		idParam := c.Param("id")
+		id, err := strconv.Atoi(idParam)
 		if err != nil {
-			ctx.JSON(http.StatusBadRequest, web.NewResponse(http.StatusBadRequest, nil, "id invalido"))
+			web.Failure(c, 400, errors.New("invalid id"))
 			return
 		}
-		var req Request
-		if err := ctx.ShouldBindJSON(&req); err != nil {
-			ctx.JSON(http.StatusBadRequest, web.NewResponse(http.StatusBadRequest, nil, err.Error()))
-			return
-		}
-
-		if req.Name == "" {
-			ctx.JSON(http.StatusBadRequest, web.NewResponse(http.StatusBadRequest, nil, "nombre es requerido"))
-			return
-		}
-
-		productUpdateByName, err := c.service.UpdateName(id, req.Name)
+		_, err = h.s.GetByID(id)
 		if err != nil {
-			ctx.JSON(http.StatusNotFound, web.NewResponse(http.StatusNotFound, nil, err.Error()))
+			web.Failure(c, 404, errors.New("product not found"))
 			return
 		}
-
-		ctx.JSON(http.StatusOK, web.NewResponse(http.StatusOK, productUpdateByName, ""))
-	}
-}
-
-func (c *Product) UpdatePartial() gin.HandlerFunc {
-	return func(ctx *gin.Context) {
-		token := ctx.GetHeader("token")
-		if token != os.Getenv("TOKEN") {
-			ctx.JSON(http.StatusUnauthorized, web.NewResponse(http.StatusUnauthorized, nil, "token invalido"))
+		if err := c.ShouldBindJSON(&r); err != nil {
+			web.Failure(c, 400, errors.New("invalid json"))
 			return
 		}
-
-		id, err := strconv.Atoi(ctx.Param("id"))
-		if err != nil {
-			ctx.JSON(http.StatusBadRequest, web.NewResponse(http.StatusBadRequest, nil, "id invalido"))
-			return
+		update := domain.Product{
+			Name:        r.Name,
+			Quantity:    r.Quantity,
+			CodeValue:   r.CodeValue,
+			IsPublished: r.IsPublished,
+			Expiration:  r.Expiration,
+			Price:       r.Price,
 		}
-
-		oldProduct, err := c.service.GetById(id)
-		if err != nil {
-			ctx.JSON(http.StatusNotFound, web.NewResponse(http.StatusNotFound, nil, err.Error()))
-			return
-		}
-
-		if err := json.NewDecoder(ctx.Request.Body).Decode(&oldProduct); err != nil {
-			ctx.JSON(http.StatusBadRequest, web.NewResponse(http.StatusBadRequest, nil, "bad request"))
-			return
-		}
-		oldProduct.Id = id
-
-		prd, err := c.service.Update(id, oldProduct.Name, oldProduct.CodeValue, oldProduct.Expiration, oldProduct.Quantity, oldProduct.Price, oldProduct.IsPublished)
-		if err != nil {
-			ctx.JSON(http.StatusBadRequest, web.NewResponse(http.StatusBadRequest, nil, err.Error()))
-			return
-		}
-
-		ctx.JSON(http.StatusOK, web.NewResponse(http.StatusOK, prd, ""))
-
-	}
-}
-
-func (c *Product) Delete() gin.HandlerFunc {
-	return func(ctx *gin.Context) {
-		token := ctx.GetHeader("token")
-		if token != os.Getenv("TOKEN") {
-			ctx.JSON(http.StatusUnauthorized, web.NewResponse(http.StatusUnauthorized, nil, "token invalido"))
-			return
-		}
-
-		id, err := strconv.Atoi(ctx.Param("id"))
-		if err != nil {
-			ctx.JSON(http.StatusBadRequest, web.NewResponse(http.StatusBadRequest, nil, "id invalido"))
-			return
-		}
-
-		err = c.service.Delete(id)
-		if err != nil {
-			ctx.JSON(http.StatusNotFound, web.NewResponse(http.StatusNotFound, nil, err.Error()))
-			return
-		}
-		ctx.JSON(http.StatusNoContent, web.NewResponse(http.StatusNoContent, nil, ""))
-	}
-}
-
-func (c *Product) GetPriceProducts() gin.HandlerFunc {
-	type response struct {
-		Products   any     `json:"products"`
-		TotalPrice float64 `json:"total_price"`
-	}
-	return func(ctx *gin.Context) {
-		token := ctx.GetHeader("token")
-		if token != os.Getenv("TOKEN") {
-			ctx.JSON(http.StatusUnauthorized, web.NewResponse(http.StatusUnauthorized, nil, "token invalido"))
-			return
-		}
-
-		query := ctx.Query("list")
-		if query == "" {
-			ctx.JSON(http.StatusBadRequest, web.NewResponse(http.StatusBadRequest, nil, "debe ingresar una lista de ids de productos"))
-			return
-		}
-		var filterProducts []domain.Product
-		var totalPrice float64
-		ids := strings.Split(query, ",")
-		for _, idInStr := range ids {
-			id, err := strconv.Atoi(idInStr)
-			if err != nil {
-				ctx.JSON(http.StatusBadRequest, web.NewResponse(http.StatusBadRequest, nil, "ingrese una lista correcta de ids"))
+		if update.Expiration != "" {
+			valid, err := validateExpiration(update.Expiration)
+			if !valid {
+				web.Failure(c, 400, err)
 				return
 			}
-			prd, err := c.service.GetById(id)
-			if err != nil {
-				ctx.JSON(http.StatusNotFound, web.NewResponse(http.StatusNotFound, nil, "no todos los ids corresponden a un producto"))
-				return
-			}
-			if checkValidate(prd.Id, filterProducts) {
-				ctx.JSON(http.StatusBadRequest, web.NewResponse(http.StatusBadRequest, nil, "se encontraron ids repetidos"))
-				return
-			}
-			if !prd.IsPublished {
-				ctx.JSON(http.StatusBadRequest, web.NewResponse(http.StatusBadRequest, nil, "recuerda que debes enviar productos que se encuentren publicados"))
-			}
-			filterProducts = append(filterProducts, prd)
 		}
-
-		allRecords, _ := c.service.GetAll()
-		if len(allRecords) < len(filterProducts) {
-			ctx.JSON(http.StatusBadRequest, web.NewResponse(http.StatusBadRequest, nil, "la cantidad de productos enviados supera la cantidad total"))
+		p, err := h.s.Update(id, update)
+		if err != nil {
+			web.Failure(c, 409, err)
 			return
 		}
-
-		for i := range filterProducts {
-			totalPrice += filterProducts[i].Price
-		}
-
-		switch {
-		case len(filterProducts) < 10:
-			totalPrice = totalPrice * 1.21
-		case len(filterProducts) > 10 && len(filterProducts) < 20:
-			totalPrice = totalPrice * 1.17
-		default:
-			totalPrice = totalPrice * 1.15
-		}
-		resp := response{Products: filterProducts, TotalPrice: float64(int(totalPrice*100)) / 100}
-
-		ctx.JSON(http.StatusOK, web.NewResponse(http.StatusOK, resp, ""))
+		web.Success(c, 200, p)
 	}
-}
-
-func checkValidate(id int, slice []domain.Product) bool {
-	for i := range slice {
-		if slice[i].Id == id {
-			return true
-		}
-	}
-
-	return false
 }
