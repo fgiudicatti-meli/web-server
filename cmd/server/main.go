@@ -11,10 +11,8 @@ import (
 )
 
 func main() {
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("error en el cargado del file .env")
-	}
+	_ = godotenv.Load()
+
 	db := store.NewStore("products.json")
 	if err := db.Check(); err != nil {
 		log.Fatal("error al intentar cargar el archivo del store")
@@ -35,7 +33,7 @@ func main() {
 		productsGroup.DELETE("/:id", p.Delete())
 	}
 
-	err = r.Run(":8080")
+	err := r.Run(":8080")
 	if err != nil {
 		panic(err)
 	}

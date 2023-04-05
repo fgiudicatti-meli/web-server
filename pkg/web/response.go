@@ -1,9 +1,9 @@
 package web
 
 type Response struct {
-	Code  int    `json:"code"`
-	Data  any    `json:"data"`
-	Error string `json:"error"`
+	StatusCode int    `json:"code"`
+	Data       any    `json:"data"`
+	ErrorMsg   string `json:"error"`
 }
 
 func NewResponse(code int, data any, err string) Response {

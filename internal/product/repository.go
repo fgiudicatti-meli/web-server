@@ -76,7 +76,7 @@ func (r *repository) Save(id int, name, codeValue, expiration string, quantity i
 	}
 	products = append(products, newProduct)
 
-	if err := r.db.Write(&products); err != nil {
+	if err := r.db.Write(products); err != nil {
 		return domain.Product{}, fmt.Errorf(ErrFailWhenWritingFile)
 	}
 
@@ -147,7 +147,7 @@ func (r *repository) Update(id int, name, codeValue, expiration string, quantity
 		return domain.Product{}, fmt.Errorf(ErrProductNotFound, id)
 	}
 
-	if err := r.db.Write(&products); err != nil {
+	if err := r.db.Write(products); err != nil {
 		return domain.Product{}, fmt.Errorf(ErrFailWhenWritingFile)
 	}
 
@@ -175,7 +175,7 @@ func (r *repository) UpdateName(id int, name string) (domain.Product, error) {
 		return domain.Product{}, fmt.Errorf(ErrProductNotFound, id)
 	}
 
-	if err := r.db.Write(&products); err != nil {
+	if err := r.db.Write(products); err != nil {
 		return domain.Product{}, fmt.Errorf(ErrFailWhenWritingFile)
 	}
 
@@ -203,7 +203,7 @@ func (r *repository) Delete(id int) (err error) {
 	}
 
 	products = append(products[:indexProductToDelete], products[indexProductToDelete+1:]...)
-	if err := r.db.Write(&products); err != nil {
+	if err := r.db.Write(products); err != nil {
 		return fmt.Errorf(ErrFailWhenWritingFile)
 	}
 

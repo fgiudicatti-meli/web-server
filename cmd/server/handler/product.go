@@ -72,7 +72,7 @@ func (c *Product) Save() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		token := ctx.Request.Header.Get("token")
 		if token != os.Getenv("TOKEN") {
-			ctx.JSON(http.StatusOK, web.NewResponse(http.StatusOK, nil, "token invalido"))
+			ctx.JSON(http.StatusUnauthorized, web.NewResponse(http.StatusUnauthorized, nil, "token invalido"))
 			return
 		}
 
