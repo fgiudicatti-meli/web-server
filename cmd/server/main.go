@@ -24,10 +24,10 @@ func main() {
 	r := gin.Default()
 	productsGroup := r.Group("/products")
 	{
-		productsGroup.POST("/", p.Save())
 		productsGroup.GET("/", p.GetAll())
-		productsGroup.GET("/consumer_price", p.GetSumProducts())
+		productsGroup.GET("/consumer_price", p.GetPriceProducts())
 		productsGroup.GET("/:id", p.GetById())
+		productsGroup.POST("/", p.Save())
 		productsGroup.PUT("/:id", p.Update())
 		productsGroup.PATCH("/:id/name", p.UpdateName())
 		productsGroup.PATCH("/:id", p.UpdatePartial())

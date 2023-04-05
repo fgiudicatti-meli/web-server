@@ -53,7 +53,7 @@ func (c *Product) GetById() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		token := ctx.Request.Header.Get("token")
 		if token != os.Getenv("TOKEN") {
-			ctx.JSON(http.StatusOK, web.NewResponse(http.StatusOK, nil, "token invalido"))
+			ctx.JSON(http.StatusUnauthorized, web.NewResponse(http.StatusUnauthorized, nil, "token invalido"))
 			return
 		}
 		id, err := strconv.Atoi(ctx.Param("id"))
@@ -235,7 +235,7 @@ func (c *Product) Delete() gin.HandlerFunc {
 	}
 }
 
-func (c *Product) GetSumProducts() gin.HandlerFunc {
+func (c *Product) GetPriceProducts() gin.HandlerFunc {
 	type response struct {
 		Products   any     `json:"products"`
 		TotalPrice float64 `json:"total_price"`
