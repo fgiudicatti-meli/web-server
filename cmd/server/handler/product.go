@@ -2,7 +2,6 @@ package handler
 
 import (
 	"encoding/json"
-	"fmt"
 	"github.com/fgiudicatti-meli/web-server/internal/domain"
 	"github.com/fgiudicatti-meli/web-server/internal/product"
 	"github.com/fgiudicatti-meli/web-server/pkg/web"
@@ -45,7 +44,7 @@ func (c *Product) GetAll() gin.HandlerFunc {
 			ctx.JSON(http.StatusNotFound, web.NewResponse(http.StatusNotFound, nil, err.Error()))
 			return
 		}
-		ctx.JSON(200, web.NewResponse(http.StatusOK, allProducts, ""))
+		ctx.JSON(http.StatusOK, web.NewResponse(http.StatusOK, allProducts, ""))
 	}
 }
 
@@ -90,7 +89,7 @@ func (c *Product) Save() gin.HandlerFunc {
 			return
 		}
 
-		ctx.JSON(http.StatusOK, web.NewResponse(http.StatusOK, createProduct, ""))
+		ctx.JSON(http.StatusCreated, web.NewResponse(http.StatusCreated, createProduct, ""))
 	}
 }
 
@@ -231,7 +230,7 @@ func (c *Product) Delete() gin.HandlerFunc {
 			ctx.JSON(http.StatusNotFound, web.NewResponse(http.StatusNotFound, nil, err.Error()))
 			return
 		}
-		ctx.JSON(http.StatusOK, web.NewResponse(http.StatusOK, fmt.Sprintf("El producto con id %d ha sido eliminado", id), ""))
+		ctx.JSON(http.StatusNoContent, web.NewResponse(http.StatusNoContent, nil, ""))
 	}
 }
 
