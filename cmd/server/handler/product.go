@@ -258,7 +258,7 @@ func (c *Product) GetSumProducts() gin.HandlerFunc {
 		for _, idInStr := range ids {
 			value, err := strconv.Atoi(idInStr)
 			if err != nil {
-				ctx.JSON(http.StatusBadRequest, web.NewResponse(http.StatusBadRequest, nil, "ingrese una lista correct de ids"))
+				ctx.JSON(http.StatusBadRequest, web.NewResponse(http.StatusBadRequest, nil, "ingrese una lista correcta de ids"))
 				return
 			}
 			prd, err := c.service.GetById(value)
