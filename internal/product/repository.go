@@ -61,24 +61,28 @@ func (r *repository) SearchPriceGt(price float64) []domain.Product {
 
 // Create agrega un nuevo producto
 func (r *repository) Create(p domain.Product) (domain.Product, error) {
-	if !r.validateCodeValue(p.CodeValue) {
+	if !r.validateCodeValue(0, p.CodeValue) {
 		return domain.Product{}, errors.New("code value already exists")
 	}
 	err := r.storage.AddOne(p)
 	if err != nil {
 		return domain.Product{}, errors.New("error creating product")
 	}
-	return p, nil
+	list, err := r.storage.GetAll()
+	if err != nil {
+		return domain.Product{}, err
+	}
+	return list[len(list)-1], nil
 }
 
 // validateCodeValue valida que el codigo no exista en la lista de productos
-func (r *repository) validateCodeValue(codeValue string) bool {
+func (r *repository) validateCodeValue(id int, codeValue string) bool {
 	list, err := r.storage.GetAll()
 	if err != nil {
 		return false
 	}
 	for _, product := range list {
-		if product.CodeValue == codeValue {
+		if product.CodeValue == codeValue && product.Id != id {
 			return false
 		}
 	}
@@ -96,7 +100,7 @@ func (r *repository) Delete(id int) error {
 
 // Update actualiza un producto
 func (r *repository) Update(id int, p domain.Product) (domain.Product, error) {
-	if !r.validateCodeValue(p.CodeValue) {
+	if !r.validateCodeValue(id, p.CodeValue) {
 		return domain.Product{}, errors.New("code value already exists")
 	}
 	err := r.storage.UpdateOne(p)
