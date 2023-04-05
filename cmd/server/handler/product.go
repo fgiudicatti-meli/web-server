@@ -256,12 +256,12 @@ func (c *Product) GetSumProducts() gin.HandlerFunc {
 		var totalPrice float64
 		ids := strings.Split(query, ",")
 		for _, idInStr := range ids {
-			value, err := strconv.Atoi(idInStr)
+			id, err := strconv.Atoi(idInStr)
 			if err != nil {
 				ctx.JSON(http.StatusBadRequest, web.NewResponse(http.StatusBadRequest, nil, "ingrese una lista correcta de ids"))
 				return
 			}
-			prd, err := c.service.GetById(value)
+			prd, err := c.service.GetById(id)
 			if err != nil {
 				ctx.JSON(http.StatusNotFound, web.NewResponse(http.StatusNotFound, nil, "no todos los ids corresponden a un producto"))
 				return
