@@ -2,16 +2,18 @@ package main
 
 import (
 	"github.com/fgiudicatti-meli/web-server/cmd/server/handler"
+	"github.com/fgiudicatti-meli/web-server/cmd/server/middlewares"
 	"github.com/fgiudicatti-meli/web-server/internal/product"
 	"github.com/fgiudicatti-meli/web-server/pkg/store"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	"log"
 )
 
 func main() {
 
 	if err := godotenv.Load("../../.env"); err != nil {
-		panic("Error loading .env file: " + err.Error())
+		log.Fatal("Error loading .env file: ", err)
 	}
 
 	storage := store.NewStore("../../products.json")
@@ -27,6 +29,8 @@ func main() {
 	{
 		products.GET("", productHandler.GetAll())
 		products.GET(":id", productHandler.GetByID())
+		// --- from here and below middleware apply in every route
+		products.Use(middlewares.MiddlewareVerifyToken())
 		products.GET("/search", productHandler.Search())
 		products.GET("/consumer_price", productHandler.GetPriceProducts())
 		products.POST("", productHandler.AddProduct())
@@ -34,8 +38,8 @@ func main() {
 		products.PATCH(":id", productHandler.Patch())
 		products.PUT(":id", productHandler.Put())
 	}
-	err := r.Run(":8080")
-	if err != nil {
+
+	if err := r.Run(); err != nil {
 		panic(err)
 	}
 }
