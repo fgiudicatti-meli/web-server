@@ -24,7 +24,24 @@ func NewProductHandler(s product.Service) *productHandler {
 	}
 }
 
-// GetAll obtiene todos los productos
+type Request struct {
+	Name        string  `json:"name,omitempty"`
+	Quantity    int     `json:"quantity,omitempty"`
+	CodeValue   string  `json:"code_value,omitempty"`
+	IsPublished bool    `json:"is_published,omitempty"`
+	Expiration  string  `json:"expiration,omitempty"`
+	Price       float64 `json:"price,omitempty"`
+}
+
+// GetAll documentation with Swagger
+// ListProducts godoc
+// @Summary List products
+// @Tags Products
+// @Description get products
+// @Produce json
+// @Param token header string true "token"
+// @Success 200 {object} web.Response
+// @Router /products [get]
 func (h *productHandler) GetAll() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		token := ctx.Request.Header.Get("token")
@@ -41,7 +58,18 @@ func (h *productHandler) GetAll() gin.HandlerFunc {
 	}
 }
 
-// GetByID obtiene un producto por su id
+// GetByID documentation with Swagger
+// GetByID godoc
+// @Summary Get one product
+// @Tags Products
+// @Description search one product that matches with id
+// @Produce json
+// @Param id path int true "Product ID"
+// @Param token header string true "token"
+// @Success 200 {object} web.Response
+// @Failure 404 {object} web.ErrorResponse
+// @Failure 400 {object} web.ErrorResponse
+// @Router /products/{id} [get]
 func (h *productHandler) GetByID() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		token := ctx.Request.Header.Get("token")
@@ -65,7 +93,18 @@ func (h *productHandler) GetByID() gin.HandlerFunc {
 	}
 }
 
-// Search busca un producto por precio mayor a un valor
+// Search documentation with Swagger
+// Search godoc
+// @Summary search products by price limit
+// @Tags Products
+// @Description find products that price is bigger than param
+// @Produce json
+// @Param priceGt query int true "Price"
+// @Param token header string true "token"
+// @Success 200 {object} web.Response
+// @Failure 404 {object} web.ErrorResponse
+// @Failure 400 {object} web.ErrorResponse
+// @Router /products/search [get]
 func (h *productHandler) Search() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		token := ctx.Request.Header.Get("token")
@@ -128,7 +167,19 @@ func validateExpiration(exp string) (bool, error) {
 	return true, nil
 }
 
-// AddProduct crear un producto nuevo
+// AddProduct documentation swagger
+// AddProduct godoc
+// @Summary build a new product
+// @Tags Products
+// @Description Create a new product and saved in db
+// @Accept json
+// @Produce json
+// @Param token header string true "Token"
+// @Param newBody body domain.Product true "Product"
+// @Success 201 {object} web.Response
+// @Failure 400 {object} web.ErrorResponse
+// @Failure 404 {object} web.ErrorResponse
+// @Router /products/new [post]
 func (h *productHandler) AddProduct() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		token := ctx.Request.Header.Get("token")
@@ -163,7 +214,18 @@ func (h *productHandler) AddProduct() gin.HandlerFunc {
 	}
 }
 
-// Delete elimina un producto
+// Delete documentation swagger
+// Delete godoc
+// @Summary eliminate a product
+// @Tags Products
+// @Description Delete definitive a product
+// @Produce json
+// @Param token header string true "Token"
+// @Param id path int true "ProductID"
+// @Success 204 {object} web.Response
+// @Failure 400 {object} web.ErrorResponse
+// @Failure 404 {object} web.ErrorResponse
+// @Router /products/{id} [delete]
 func (h *productHandler) Delete() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		token := ctx.Request.Header.Get("token")
@@ -188,7 +250,20 @@ func (h *productHandler) Delete() gin.HandlerFunc {
 	}
 }
 
-// Put actualiza un producto
+// Put documentation swagger
+// Put godoc
+// @Summary modify totally a product
+// @Tags Products
+// @Description update with all fields a product
+// @Accept json
+// @Produce json
+// @Param token header string true "Token"
+// @Param id path int true "Product ID"
+// @Param putProduct body domain.Product true "UpdateProduct"
+// @Success 200 {object} web.Response
+// @Failure 400 {object} web.ErrorResponse
+// @Failure 404 {object} web.ErrorResponse
+// @Router /products/{id} [put]
 func (h *productHandler) Put() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		token := ctx.Request.Header.Get("token")
@@ -236,16 +311,22 @@ func (h *productHandler) Put() gin.HandlerFunc {
 	}
 }
 
-// Patch update selected fields of a product WIP
+// Patch documentation swagger
+// Patch godoc
+// @Summary Partially update a product
+// @Tags Products
+// @Description update not totally fields only some
+// @Accept json
+// @Produce json
+// @Param token header string true "Token"
+// @Param id path int true "Product ID"
+// @Param patchBody body Request true "updateProduct"
+// @Success 200 {object} web.Response
+// @Failure 400 {object} web.ErrorResponse
+// @Failure 404 {object} web.ErrorResponse
+// @Router /products/{id} [patch]
 func (h *productHandler) Patch() gin.HandlerFunc {
-	type Request struct {
-		Name        string  `json:"name,omitempty"`
-		Quantity    int     `json:"quantity,omitempty"`
-		CodeValue   string  `json:"code_value,omitempty"`
-		IsPublished bool    `json:"is_published,omitempty"`
-		Expiration  string  `json:"expiration,omitempty"`
-		Price       float64 `json:"price,omitempty"`
-	}
+
 	return func(ctx *gin.Context) {
 		token := ctx.Request.Header.Get("token")
 		if token != os.Getenv("TOKEN") {
@@ -307,6 +388,19 @@ func (h *productHandler) Patch() gin.HandlerFunc {
 		web.Success(ctx, http.StatusOK, p)
 	}
 }
+
+// PartialUpdate godoc
+// @Summary Partially update a product
+// @Tags Products
+// @Description Update some product fields data
+// @Accept json
+// @Produce json
+// @Param token header string true "Token"
+// @Param list query int true "Price"
+// @Success 200 {object} web.Response
+// @Failure 400 {object} web.ErrorResponse
+// @Failure 404 {object} web.ErrorResponse
+// @Router /products/consumer_price [get]
 
 func (h *productHandler) GetPriceProducts() gin.HandlerFunc {
 	type response struct {

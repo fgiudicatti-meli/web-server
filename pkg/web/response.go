@@ -6,26 +6,26 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type errorResponse struct {
+type ErrorResponse struct {
 	Status  int    `json:"status"`
 	Code    string `json:"code"`
 	Message string `json:"message"`
 }
 
-type response struct {
+type Response struct {
 	Data interface{} `json:"data"`
 }
 
 // Success escribe una respuesta exitosa
 func Success(ctx *gin.Context, status int, data interface{}) {
-	ctx.JSON(status, response{
+	ctx.JSON(status, Response{
 		Data: data,
 	})
 }
 
 // Failure escribe una respuesta fallida
 func Failure(ctx *gin.Context, status int, err error) {
-	ctx.JSON(status, errorResponse{
+	ctx.JSON(status, ErrorResponse{
 		Message: err.Error(),
 		Status:  status,
 		Code:    http.StatusText(status),
