@@ -8,9 +8,8 @@ import (
 	"time"
 )
 
-// MiddlewareVerifyToken gestiona token entre request
+// MiddlewareVerifyToken check if a token is valid 
 func MiddlewareVerifyToken() gin.HandlerFunc {
-	//add token in the header
 	return func(ctx *gin.Context) {
 		token := ctx.Request.Header.Get("token")
 		if token != os.Getenv("TOKEN") {
